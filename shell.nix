@@ -1,6 +1,9 @@
 {pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/refs/tags/23.05.tar.gz") {}}:
 pkgs.mkShell {
   buildInputs = [
+    pkgs.xxd
+    pkgs.python311Packages.virtualenv
+    pkgs.python311Packages.pip
     # pkgs.go
     # pkgs.gopls
     # pkgs.golangci-lint
