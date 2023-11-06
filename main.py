@@ -10,10 +10,9 @@ from typing import List, Dict
 def main():
     parser = ArgumentParser()
     parser.add_argument('action', choices=['cipher', 'decipher'], help='action to do with informed message or file')
-    parser.add_argument('-m', '--message', help='message text to cipher or decipher')
     parser.add_argument('-f', '--file', help='file path to cipher or decipher')
     parser.add_argument('-o', '--output', help='output path of result, stdout if not specified')
-    parser.add_argument('-k', '--key', help='key used to cipher the text')
+    parser.add_argument('-k', '--key-file', help='key used to cipher the text')
     parser.add_argument('-r', '--rounds', type=int, help='number of rounds to use when chiphering or dechipering the data', default=10)
     args = vars(parser.parse_args())
     # print(args)
@@ -21,19 +20,17 @@ def main():
     data = None
     file_name = args.get('file')
     if file_name and os.path.isfile(file_name):
-        with open(file_name, 'r') as f:
-            data = bytearray(f.readall())
+        with open(file_name, 'rb') as f:
+            data = f.read()
 
-    if data is None:
-        data = bytes(args.get('message'), 'ascii')
-        if data is None:
-            data = bytes(sys.stdin.read(), 'ascii')
+    key = None
+    if os.path.isfile(args['key_file']):
+        with open(args['key_file'], 'rb') as f:
+            key = f.read()
 
     match args['action']:
         case 'cipher':
-
-            result = aes_encrypt_ecb(args['key'], data, args.get('rounds'))
-            # print(result, end='')
+            result = aes_encrypt_ecb(key, data, args.get('rounds'))
             print()
             print_vector(result)
         case 'decipher':
@@ -47,6 +44,12 @@ def main():
 def aes_encrypt_ecb(key: str, message_data: List[int], rounds: int) -> List[int]:
     chipter_data = []
     extended_key = aes_key_schedule(key[0:16], rounds)
+    print('extended_key:')
+    for i in range(len(extended_key)):
+        print_matrix(extended_key[i])
+
+    print('\nmessage:')
+    print_vector(message_data)
 
     message_with_padding = message_data[:]
     if len(message_data) % 16 != 0:
@@ -54,15 +57,29 @@ def aes_encrypt_ecb(key: str, message_data: List[int], rounds: int) -> List[int]
             message_with_padding.append(0x00)
 
     for i in range(0, len(message_with_padding), 16):
+        if i > 0:
+            continue
+
         data_slice = message_with_padding[i:i+16]
         block = vector_to_matrix(data_slice)
         block = add_round_key(block, extended_key[0])
+        print('\ninput to round 1:')
+        print_matrix(block)
 
         for _round in range(rounds - 1):
             block = sub_bytes(block, S_BOX)
+            print(f'\nafter s-box [{_round + 1}]:')
+            print_matrix(block)
             block = shift_rows(block)
+            print(f'\nafter permutation [{_round + 1}]:')
+            print_matrix(block)
             block = mix_columns(block, RIJNDAEL_MIX_COLUMNS)
+            print(f'\nafter multi [{_round + 1}]:')
+            print_matrix(block)
             block = add_round_key(block, extended_key[_round + 1])
+            print(f'\nafter mix with key [{_round + 1}]:')
+            print_matrix(block)
+            print('\n\n')
 
         block = sub_bytes(block, S_BOX)
         block = shift_rows(block)
@@ -73,14 +90,14 @@ def aes_encrypt_ecb(key: str, message_data: List[int], rounds: int) -> List[int]
     return chipter_data
 
 
-def aes_key_schedule(key: str, rounds: int) -> List[List[List[int]]]:
+def aes_key_schedule(key: List[int], rounds: int) -> List[List[List[int]]]:
     # initial round
-    sub_key = bytearray(key, 'ascii')
+    sub_key = [key[i] for i in range(len(key))]
     for i in range(32 - len(sub_key)):
         sub_key.append(0x00)
 
     sub_key = vector_to_matrix(sub_key)
-    print_matrix(sub_key)
+    # print_matrix(sub_key)
 
     expanded_key = []
     expanded_key.append(sub_key)
@@ -88,18 +105,18 @@ def aes_key_schedule(key: str, rounds: int) -> List[List[List[int]]]:
     # N rounds
     for _round in range(rounds):
         sub_key = expanded_key[_round]
-        print_matrix(sub_key)
+        # print_matrix(sub_key)
 
         round_key = [[0x00, 0x00, 0x00, 0x00] for _ in range(4)] # 4x4 0x00 matrix
         round_constant_vector = [RCI[_round], 0x00, 0x00, 0x00]
 
         word_vector = [sub_key[i][3] for i in range(4)]
-        print_vector(word_vector)
+        # print_vector(word_vector)
         word_vector = word_vector[1:4] + [word_vector[0]]
-        print_vector(word_vector)
+        # print_vector(word_vector)
         for i in range(4):
             word_vector[i] = S_BOX[word_vector[i]] ^ round_constant_vector[i]
-        print_vector(word_vector)
+        # print_vector(word_vector)
 
         for row in range(4):
             round_key[row][0] = word_vector[row] ^ sub_key[row][0]
@@ -122,12 +139,26 @@ def sub_bytes(block: List[List[int]], vector: List[int]) -> List[List[int]]:
 
 
 def shift_rows(block: List[List[int]]) -> List[List[int]]:
-    result = [[0x00, 0x00, 0x00, 0x00] for _ in range(4)] # 4x4 0x00 matrix
-    shifts = 1
-    for col in range(1, 4):
-        for row in range(4):
-            result[row][col - shifts] = block[row][col]
-        shifts += 1
+    result = [row[:] for row in block]
+    # for row in block:
+    #     result_row = []
+    #     for item in row:
+    #         result_row.append(item)
+    #     result.append(result_row)
+
+    shifts = [i for i in range(4)]
+    head = shifts.pop(0)
+    shifts += [head]
+    for row in range(1, 4):
+        print(f'block:')
+        print_matrix(block)
+        for col in range(4):
+            print(f'\n[{row}][{col}] = [{row}][{shifts[col]}]')
+            result[row][col] = block[row][shifts[col]]
+        print()
+        print_matrix(result)
+        head = shifts.pop(0)
+        shifts += [head]
     return result
 
 
