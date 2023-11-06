@@ -105,14 +105,8 @@ def aes_decrypt_ecb(key: str, message_data: List[int], rounds: int) -> List[int]
     print_vector(message_data)
 
     message_with_padding = message_data[:]
-    # if len(message_data) % 16 != 0:
-    #     for i in range(16 - (len(message_data) % 16)):
-    #         message_with_padding.append(0x00)
 
     for i in range(0, len(message_with_padding), 16):
-        if i > 0:
-            continue
-
         data_slice = message_with_padding[i:i+16]
         block = vector_to_matrix(data_slice)
         block = add_round_key(block, extended_key[10])
@@ -282,6 +276,23 @@ def matrix_to_vector(block_matrix: List[List[int]]) -> List[int]:
             i += 1
     return result
 
+def increment_vector(vector: List[int]) -> List[int]:
+    carry = 0x01
+    result = [0x00 for _ in range(len(vector))] # 0x00 vector
+    for i in range(len(vector) - 1, -1, -1):
+        result[i] = (vector[i] + carry) & 0xff
+        carry = (vector[i] + carry) >> 8
+
+    return result
+
+def add_vectors(rhs: List[int], lhs: List[int]) -> List[int]:
+    carry = 0x00
+    result = [0x00 for _ in range(len(rhs))] # 0x00 vector
+    for i in range(len(rhs) - 1, -1, -1):
+        result[i] = (rhs[i] + lhs[i] + carry) & 0xff
+        carry = (rhs[i] + lhs[i] + carry) >> 8
+
+    return result
 
 def print_vector(block_vector: List[int]):
     for i in range(len(block_vector)):
