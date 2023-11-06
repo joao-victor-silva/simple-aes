@@ -61,9 +61,6 @@ def aes_encrypt_ecb(key: str, message_data: List[int], rounds: int) -> List[int]
             message_with_padding.append(0x00)
 
     for i in range(0, len(message_with_padding), 16):
-        if i > 0:
-            continue
-
         data_slice = message_with_padding[i:i+16]
         block = vector_to_matrix(data_slice)
         block = add_round_key(block, extended_key[0])
