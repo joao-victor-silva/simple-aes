@@ -33,16 +33,20 @@ def main():
             result = aes_encrypt_ecb(key, data, args.get('rounds'))
             print()
             print_vector(result)
+            if args.get('output'):
+                with open(args['output'], 'wb') as f:
+                    key = f.write(bytearray(result))
         case 'decipher':
-            pass
-            # print(decipher(args['key'], data), end='')
+            result = aes_decrypt_ecb(key, data, args.get('rounds'))
+            print()
+            print_vector(result)
         case _:
             print('invalid option. quiting...')
             exit(1)
 
 
 def aes_encrypt_ecb(key: str, message_data: List[int], rounds: int) -> List[int]:
-    chipter_data = []
+    chipher_data = []
     extended_key = aes_key_schedule(key[0:16], rounds)
     print('extended_key:')
     for i in range(len(extended_key)):
@@ -85,9 +89,58 @@ def aes_encrypt_ecb(key: str, message_data: List[int], rounds: int) -> List[int]
         block = shift_rows(block)
         block = add_round_key(block, extended_key[rounds])
 
-        chipter_data += matrix_to_vector(block)
+        chipher_data += matrix_to_vector(block)
 
-    return chipter_data
+    return chipher_data
+
+
+def aes_decrypt_ecb(key: str, message_data: List[int], rounds: int) -> List[int]:
+    dechipher_data = []
+    extended_key = aes_key_schedule(key[0:16], rounds)
+    print('extended_key:')
+    for i in range(len(extended_key)):
+        print_matrix(extended_key[i])
+
+    print('\nmessage:')
+    print_vector(message_data)
+
+    message_with_padding = message_data[:]
+    # if len(message_data) % 16 != 0:
+    #     for i in range(16 - (len(message_data) % 16)):
+    #         message_with_padding.append(0x00)
+
+    for i in range(0, len(message_with_padding), 16):
+        if i > 0:
+            continue
+
+        data_slice = message_with_padding[i:i+16]
+        block = vector_to_matrix(data_slice)
+        block = add_round_key(block, extended_key[10])
+        print('\ninput to round 10:')
+        print_matrix(block)
+
+        for _round in range(rounds - 1, 0, -1):
+            block = sub_bytes(block, INVERSE_S_BOX)
+            print(f'\nafter s-box [{_round + 1}]:')
+            print_matrix(block)
+            block = inversed_shift_rows(block)
+            print(f'\nafter permutation [{_round + 1}]:')
+            print_matrix(block)
+            block = add_round_key(block, extended_key[_round])
+            print(f'\nafter mix with key [{_round + 1}]:')
+            print_matrix(block)
+            block = mix_columns(block, RIJNDAEL_INVERSE_MIX_COLUMNS)
+            print(f'\nafter multi [{_round + 1}]:')
+            print_matrix(block)
+            print('\n\n')
+
+        block = sub_bytes(block, INVERSE_S_BOX)
+        block = inversed_shift_rows(block)
+        block = add_round_key(block, extended_key[0])
+
+        dechipher_data += matrix_to_vector(block)
+
+    return dechipher_data
 
 
 def aes_key_schedule(key: List[int], rounds: int) -> List[List[List[int]]]:
@@ -140,15 +193,11 @@ def sub_bytes(block: List[List[int]], vector: List[int]) -> List[List[int]]:
 
 def shift_rows(block: List[List[int]]) -> List[List[int]]:
     result = [row[:] for row in block]
-    # for row in block:
-    #     result_row = []
-    #     for item in row:
-    #         result_row.append(item)
-    #     result.append(result_row)
 
     shifts = [i for i in range(4)]
     head = shifts.pop(0)
     shifts += [head]
+
     for row in range(1, 4):
         print(f'block:')
         print_matrix(block)
@@ -157,8 +206,32 @@ def shift_rows(block: List[List[int]]) -> List[List[int]]:
             result[row][col] = block[row][shifts[col]]
         print()
         print_matrix(result)
+
         head = shifts.pop(0)
         shifts += [head]
+
+    return result
+
+
+def inversed_shift_rows(block: List[List[int]]) -> List[List[int]]:
+    result = [row[:] for row in block]
+
+    shifts = [i for i in range(4)]
+    tail = shifts.pop(3)
+    shifts = [tail] + shifts
+
+    for row in range(1, 4):
+        print(f'block:')
+        print_matrix(block)
+        for col in range(4):
+            print(f'\n[{row}][{col}] = [{row}][{shifts[col]}]')
+            result[row][col] = block[row][shifts[col]]
+        print()
+        print_matrix(result)
+
+        tail = shifts.pop(3)
+        shifts = [tail] + shifts
+
     return result
 
 
